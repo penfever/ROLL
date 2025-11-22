@@ -133,12 +133,26 @@ class PretrainedConfig:
         if os.path.isfile(config_file):
             config = cls.from_json_file(config_file)
             from_mca_ckpt = True
-        elif os.path.isfile(os.path.join(model_name_or_path, HF_CONFIG_NAME)):
-            # from hf ckpt
-            logger.info(f"Did not find {config_file}, loading HuggingFace config from {model_name_or_path}")
-            hf_config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)
-            template: "Template" = get_template(hf_config.model_type)
-            config = cls(**template.convert_hf_to_mca_config_kws(hf_config))
+        else:
+            hf_config_path = os.path.join(model_name_or_path, HF_CONFIG_NAME)
+            if os.path.isfile(hf_config_path):
+                logger.info(f"Did not find {config_file}, loading HuggingFace config from {model_name_or_path}")
+                hf_config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)
+                template: "Template" = get_template(hf_config.model_type)
+                config = cls(**template.convert_hf_to_mca_config_kws(hf_config))
+            else:
+                try:
+                    logger.info(
+                        f"Downloading HuggingFace config for {model_name_or_path} via AutoConfig.from_pretrained."
+                    )
+                    hf_config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)
+                    template: "Template" = get_template(hf_config.model_type)
+                    config = cls(**template.convert_hf_to_mca_config_kws(hf_config))
+                except Exception as exc:
+                    raise ValueError(
+                        f"Failed to load HuggingFace config for {model_name_or_path}. "
+                        "Ensure the identifier is valid and accessible."
+                    ) from exc
 
         if args is not None:
             config.update_with_args(args, verbose=from_mca_ckpt)
