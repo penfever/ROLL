@@ -15,6 +15,11 @@ logger = get_logger(__name__)
 
 CONFIG_MAPPING = OrderedDict()
 
+MODEL_TYPE_ALIASES = {
+    "qwen3-coder": "qwen3_moe",
+    "qwen3_coder": "qwen3_moe",
+}
+
 
 def register_config(model_type, cls=None):
     def decorator(cls):
@@ -56,6 +61,23 @@ class AutoConfig:
             logger.info(f"Did not find {config_file}, loading HuggingFace config from {model_name_or_path}")
             hf_config = HfAutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)
             model_type = hf_config.model_type
+
+        if model_type is None:
+            lowered_name = str(model_name_or_path).lower()
+            for key, alias in MODEL_TYPE_ALIASES.items():
+                if key in lowered_name:
+                    logger.warning(
+                        f"Could not infer model type from config for {model_name_or_path}, "
+                        f"falling back to alias '{alias}'."
+                    )
+                    model_type = alias
+                    break
+        elif model_type in MODEL_TYPE_ALIASES and model_type not in CONFIG_MAPPING:
+            alias = MODEL_TYPE_ALIASES[model_type]
+            logger.warning(
+                f"Model type '{model_type}' not registered, using alias '{alias}' for {model_name_or_path}."
+            )
+            model_type = alias
 
         if model_type is None:
             raise ValueError(f"No valid config found in {model_name_or_path}")
