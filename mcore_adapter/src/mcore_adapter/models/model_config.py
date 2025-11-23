@@ -14,6 +14,13 @@ from megatron.core.transformer.pipeline_parallel_layer_layout import PipelinePar
 from transformers import AutoConfig
 from transformers.configuration_utils import CONFIG_NAME as HF_CONFIG_NAME
 
+try:  # pragma: no cover - optional dependency check
+    import transformer_engine  # noqa: F401
+
+    _TRANSFORMER_ENGINE_AVAILABLE = True
+except Exception:  # pragma: no cover - defensive fallback
+    _TRANSFORMER_ENGINE_AVAILABLE = False
+
 from ..constants import MCA_CONFIG_NAME, HUGGINGFACE_AUTOMAP_CACHE
 from ..initialize import initialize_megatron
 from ..training_args import DistributingParallelArguments, TrainingArguments
@@ -235,6 +242,12 @@ class McaModelConfig(TransformerConfig, PretrainedConfig):
     )
 
     def __post_init__(self):
+        if self.transformer_impl == "transformer_engine" and not _TRANSFORMER_ENGINE_AVAILABLE:
+            logger.warning(
+                "Transformer Engine is not available; falling back to the local transformer implementation."
+            )
+            self.transformer_impl = "local"
+
         if self.virtual_pipeline_model_parallel_size is None and self.overlap_p2p_comm:
             self.overlap_p2p_comm = False
             logger.warning("Non-interleaved pipeline parallelism does not support overlapping p2p communication!")
